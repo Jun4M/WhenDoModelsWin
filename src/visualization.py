@@ -114,7 +114,9 @@ def plot_baselines_lc(
         _draw_lc_panel(ax, df, metric, title=f'{target} — {METRIC_LABELS.get(metric, metric)}')
         out = os.path.join(plots_dir, f'plot_baselines_{target}_{metric}.png')
         plt.tight_layout()
-        plt.savefig(out, dpi=150)
+        for _ext in ['png', 'pdf']:
+            _out = os.path.splitext(out)[0] + f'.{_ext}'
+            plt.savefig(_out, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"  [viz] → {out}")
 
@@ -125,7 +127,9 @@ def plot_baselines_lc(
         _draw_lc_panel(ax, df, metric, title=METRIC_LABELS.get(metric, metric))
     plt.tight_layout()
     out = os.path.join(plots_dir, f'plot_baselines_lc_{target}.png')
-    plt.savefig(out, dpi=150)
+    for _ext in ['png', 'pdf']:
+            _out = os.path.splitext(out)[0] + f'.{_ext}'
+            plt.savefig(_out, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"  [viz] → {out}")
 
@@ -153,7 +157,9 @@ def plot_gtca_depth_lc(
         _draw_lc_panel(ax, df, metric, title=METRIC_LABELS.get(metric, metric))
     plt.tight_layout()
     out = os.path.join(plots_dir, f'plot_gtca_depth_lc_{target}.png')
-    plt.savefig(out, dpi=150)
+    for _ext in ['png', 'pdf']:
+            _out = os.path.splitext(out)[0] + f'.{_ext}'
+            plt.savefig(_out, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"  [viz] → {out}")
 
@@ -194,7 +200,9 @@ def plot_combined_final(
         _draw_lc_panel(ax, combined, metric, title=METRIC_LABELS.get(metric, metric))
     plt.tight_layout()
     out = os.path.join(plots_dir, f'plot_final_{target}_depth{best_gtca_depth}.png')
-    plt.savefig(out, dpi=150)
+    for _ext in ['png', 'pdf']:
+            _out = os.path.splitext(out)[0] + f'.{_ext}'
+            plt.savefig(_out, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"  [viz] → {out}")
 
@@ -238,7 +246,9 @@ def plot_group_analysis(
         ax.grid(True, axis='y', alpha=0.3)
         plt.tight_layout()
         out = os.path.join(plots_dir, f'group_{target}_{group_type}.png')
-        plt.savefig(out, dpi=150)
+        for _ext in ['png', 'pdf']:
+            _out = os.path.splitext(out)[0] + f'.{_ext}'
+            plt.savefig(_out, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"  [viz] → {out}")
 

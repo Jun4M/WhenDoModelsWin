@@ -410,14 +410,92 @@ class AttentiveFPRegressor(nn.Module):
 
 
 # ===========================================================================
-# PaiNN
+# PaiNN (pure PyTorch, no PaiNNConv dependency)
+# Schütt et al. (2021) "Equivariant message passing for the prediction of
+# tensorial properties and molecular spectra", ICML 2021.
 # ===========================================================================
+
+class _PaiNNMessage(nn.Module):
+    """Message step: propagate scalar s and vector v separately."""
+
+    def __init__(self, hidden_channels: int, num_rbf: int):
+        super().__init__()
+        F = hidden_channels
+        # phi_s: maps source scalar → 3F channels (split: ds, v_vv, v_vr)
+        self.phi_s = nn.Sequential(
+            nn.Linear(F, F), nn.SiLU(), nn.Linear(F, 3 * F)
+        )
+        # W_filter: RBF → 3F (same split)
+        self.W_filter = nn.Sequential(
+            nn.Linear(num_rbf, F), nn.SiLU(), nn.Linear(F, 3 * F)
+        )
+
+    def forward(self, s, v, edge_index, rbf, unit):
+        # s: (N, F)  v: (N, F, 3)
+        # rbf: (E, num_rbf)  unit: (E, 3)
+        src, dst = edge_index
+        F = s.shape[1]
+
+        phi = self.phi_s(s[src])          # (E, 3F)
+        W   = self.W_filter(rbf)          # (E, 3F)
+        x   = phi * W                     # (E, 3F)
+
+        x_s, x_vv, x_vr = x.split(F, dim=-1)  # each (E, F)
+
+        # Scalar aggregation
+        ds = torch.zeros_like(s)
+        ds.scatter_add_(0, dst.unsqueeze(-1).expand_as(x_s), x_s)
+
+        # Vector aggregation: contribution from neighbor v + direction r_ij
+        # x_vv * v[src]: (E, F, 3)
+        msg_vv = x_vv.unsqueeze(-1) * v[src]              # (E, F, 3)
+        # x_vr * unit_ij: (E, F, 3)
+        msg_vr = x_vr.unsqueeze(-1) * unit.unsqueeze(-2)  # (E, F, 3)
+
+        dv  = torch.zeros_like(v)
+        idx = dst.view(-1, 1, 1).expand_as(msg_vv)
+        dv.scatter_add_(0, idx, msg_vv + msg_vr)
+
+        return s + ds, v + dv
+
+
+class _PaiNNUpdate(nn.Module):
+    """Update step: equivariant gated residual (scalar + vector)."""
+
+    def __init__(self, hidden_channels: int):
+        super().__init__()
+        F = hidden_channels
+        # Channel-wise linear transforms on v (no bias for equivariance)
+        self.U = nn.Linear(F, F, bias=False)
+        self.V = nn.Linear(F, F, bias=False)
+        # Gate network: input = [s, ||V(v)||]  (2F → 3F)
+        self.gate = nn.Sequential(
+            nn.Linear(2 * F, F), nn.SiLU(), nn.Linear(F, 3 * F)
+        )
+
+    def forward(self, s, v):
+        # v: (N, F, 3) — apply U, V over the F dimension
+        # Permute to (N, 3, F), apply linear, permute back
+        Uv = self.U(v.permute(0, 2, 1)).permute(0, 2, 1)  # (N, F, 3)
+        Vv = self.V(v.permute(0, 2, 1)).permute(0, 2, 1)  # (N, F, 3)
+
+        Vv_norm = Vv.norm(dim=-1)                           # (N, F)
+        inner   = (Uv * Vv).sum(dim=-1)                    # (N, F)
+
+        a = self.gate(torch.cat([s, Vv_norm], dim=-1))     # (N, 3F)
+        F = s.shape[1]
+        a_ss, a_sv, a_vv = a.split(F, dim=-1)
+
+        s_new = s + a_ss + a_sv * inner
+        v_new = v + a_vv.unsqueeze(-1) * Uv
+
+        return s_new, v_new
+
 
 class PaiNNRegressor(nn.Module):
     """
-    PaiNN for 3D molecular property prediction.
+    PaiNN for 3D molecular property prediction (pure PyTorch, no PaiNNConv).
     Requires PyG Data with .pos (N_atoms, 3) attribute.
-    Uses RadiusGraph transform to build edges from 3D coords.
     """
 
     def __init__(
@@ -428,22 +506,17 @@ class PaiNNRegressor(nn.Module):
         num_rbf: int = 20,
     ):
         super().__init__()
-        from torch_geometric.nn import PaiNNConv, radius_graph
-        from torch_geometric.nn import SumAggregation
-
         self.hidden_channels = hidden_channels
         self.cutoff = cutoff
         self.num_rbf = num_rbf
 
-        # Atom embedding (atomic number → hidden)
         self.atom_emb = nn.Embedding(100, hidden_channels)
 
-        # RBF for distances
-        self.rbf = nn.Linear(num_rbf, hidden_channels, bias=False)
-
-        self.convs = nn.ModuleList([
-            PaiNNConv(hidden_channels, hidden_channels)
-            for _ in range(num_layers)
+        self.msg_layers = nn.ModuleList([
+            _PaiNNMessage(hidden_channels, num_rbf) for _ in range(num_layers)
+        ])
+        self.upd_layers = nn.ModuleList([
+            _PaiNNUpdate(hidden_channels) for _ in range(num_layers)
         ])
 
         self.head = nn.Sequential(
@@ -451,34 +524,67 @@ class PaiNNRegressor(nn.Module):
             nn.SiLU(),
             nn.Linear(64, 1),
         )
-        self.pool = SumAggregation()
 
-    def _rbf_encode(self, dist):
-        """Gaussian RBF encoding of distances."""
-        centers = torch.linspace(0, self.cutoff, self.num_rbf, device=dist.device)
-        width = (self.cutoff / self.num_rbf) ** 2
-        rbf = torch.exp(-((dist.unsqueeze(-1) - centers) ** 2) / width)
-        return self.rbf(rbf)
+    def _rbf(self, dist):
+        """Gaussian RBF: (E,) → (E, num_rbf)."""
+        centers = torch.linspace(0.0, self.cutoff, self.num_rbf, device=dist.device)
+        width   = (self.cutoff / self.num_rbf) ** 2
+        return torch.exp(-((dist.unsqueeze(-1) - centers) ** 2) / width)
 
-    def forward(self, x, pos, batch):
-        from torch_geometric.nn import radius_graph
-        # Build radius graph
-        edge_index = radius_graph(pos, r=self.cutoff, batch=batch, max_num_neighbors=32)
-        row, col = edge_index
-        diff = pos[row] - pos[col]
-        dist = diff.norm(dim=-1, keepdim=True)
-        unit = diff / (dist + 1e-8)
+    @staticmethod
+    def _radius_graph(pos, r, batch, max_num_neighbors=32):
+        """Pure-PyTorch radius graph (avoids torch-cluster dependency)."""
+        device = pos.device
+        num_nodes = pos.shape[0]
+        rows, cols = [], []
+        for b in batch.unique():
+            mask = (batch == b).nonzero(as_tuple=True)[0]
+            p = pos[mask]                                    # (n, 3)
+            dist2 = torch.cdist(p, p)                       # (n, n)
+            # exclude self-loops
+            dist2.fill_diagonal_(float('inf'))
+            adj = dist2 < r * r
+            local_src, local_dst = adj.nonzero(as_tuple=True)
+            # cap neighbors
+            if max_num_neighbors < p.shape[0] - 1:
+                for node in range(p.shape[0]):
+                    nbrs = (local_dst == node).nonzero(as_tuple=True)[0]
+                    if len(nbrs) > max_num_neighbors:
+                        keep = nbrs[dist2[local_src[nbrs], node].argsort()[:max_num_neighbors]]
+                        drop = nbrs[~torch.isin(nbrs, keep)]
+                        adj[local_src[drop], node] = False
+                local_src, local_dst = adj.nonzero(as_tuple=True)
+            global_idx = mask
+            rows.append(global_idx[local_src])
+            cols.append(global_idx[local_dst])
+        if len(rows) == 0:
+            return torch.zeros(2, 0, dtype=torch.long, device=device)
+        return torch.stack([torch.cat(rows), torch.cat(cols)], dim=0)
 
-        # Atom features: use first column of x as atomic number proxy
+    def forward(self, x, pos, batch, radius_edge_index=None):
+        if radius_edge_index is not None:
+            edge_index = radius_edge_index
+        else:
+            edge_index = self._radius_graph(pos, self.cutoff, batch, max_num_neighbors=32)
+        src, dst   = edge_index
+        diff       = pos[src] - pos[dst]                    # (E, 3)
+        dist       = diff.norm(dim=-1)                      # (E,)
+        unit       = diff / (dist.unsqueeze(-1) + 1e-8)     # (E, 3)
+        rbf        = self._rbf(dist)                        # (E, num_rbf)
+
         atom_idx = x[:, 0].long().clamp(0, 99)
-        h = self.atom_emb(atom_idx)
-        edge_feat = self._rbf_encode(dist.squeeze(-1))
+        s = self.atom_emb(atom_idx)                         # (N, F)
+        v = torch.zeros(s.shape[0], s.shape[1], 3, device=s.device)  # (N, F, 3)
 
-        for conv in self.convs:
-            h, _ = conv(h, edge_index, unit, edge_feat)
+        for msg, upd in zip(self.msg_layers, self.upd_layers):
+            s, v = msg(s, v, edge_index, rbf, unit)
+            s, v = upd(s, v)
 
-        h = self.pool(h, batch)
-        return self.head(h).squeeze(-1)
+        # global sum pool (pure PyTorch, no torch_geometric dependency)
+        num_graphs = int(batch.max().item()) + 1
+        out = torch.zeros(num_graphs, s.shape[1], device=s.device)
+        out.scatter_add_(0, batch.unsqueeze(-1).expand_as(s), s)
+        return self.head(out).squeeze(-1)
 
 
 # ===========================================================================
@@ -535,27 +641,45 @@ class GPSRegressor(nn.Module):
             nn.Linear(64, 1),
         )
 
-    def _compute_rwse(self, edge_index, num_nodes, device):
-        """Random Walk Structural Encoding (RWSE)."""
+    def _compute_rwse_single(self, edge_index, n):
+        """RWSE for a single molecule (n atoms) on CPU."""
         from torch_geometric.utils import add_self_loops, degree
-        edge_index_sl, _ = add_self_loops(edge_index, num_nodes=num_nodes)
-        deg = degree(edge_index_sl[0], num_nodes=num_nodes).clamp(min=1)
-        # Transition matrix row-normalized
-        # Approximate RWSE via power iteration
-        pe = torch.zeros(num_nodes, self.walk_length, device=device)
-        # Landing probabilities: p_k[v] = prob of being at v after k steps
-        row, col = edge_index_sl
-        x = torch.eye(num_nodes, device=device)
+        ei_sl, _ = add_self_loops(edge_index, num_nodes=n)
+        deg = degree(ei_sl[0], num_nodes=n).clamp(min=1)
+        row, col = ei_sl
+        pe = torch.zeros(n, self.walk_length)
+        p = torch.eye(n)
         for k in range(self.walk_length):
-            x = torch.zeros_like(x)
-            x[col] += x[row] / deg[row].unsqueeze(-1)
-            pe[:, k] = x.diagonal()
+            p_new = torch.zeros_like(p)
+            p_new[col] += p[row] / deg[row].unsqueeze(-1)
+            p = p_new
+            pe[:, k] = p.diagonal()
         return pe
+
+    def _compute_rwse(self, edge_index, num_nodes, device, batch=None):
+        """Compute RWSE on CPU per molecule, return tensor on original device."""
+        orig_device = device
+        edge_index = edge_index.cpu()
+        pe = torch.zeros(num_nodes, self.walk_length)  # CPU
+        if batch is None:
+            pe = self._compute_rwse_single(edge_index, num_nodes)
+        else:
+            batch_cpu = batch.cpu()
+            for b in batch_cpu.unique():
+                mask = (batch_cpu == b).nonzero(as_tuple=True)[0]
+                n = mask.shape[0]
+                src_in = torch.isin(edge_index[0], mask)
+                local_ei = edge_index[:, src_in]
+                idx_map = torch.zeros(num_nodes, dtype=torch.long)
+                idx_map[mask] = torch.arange(n)
+                local_ei = idx_map[local_ei]
+                pe[mask] = self._compute_rwse_single(local_ei, n)
+        return pe.to(orig_device)
 
     def forward(self, x, edge_index, edge_attr, batch):
         num_nodes = x.size(0)
-        # RWSE positional encoding
-        pe = self._compute_rwse(edge_index, num_nodes, x.device)
+        # RWSE per molecule (avoids N_batch×N_batch OOM on large batches)
+        pe = self._compute_rwse(edge_index, num_nodes, x.device, batch)
         x = torch.cat([x, pe], dim=-1)
         x = self.input_proj(x)
 

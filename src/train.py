@@ -578,7 +578,8 @@ def train_painn(
         for batch in loader:
             batch = batch.to(device)
             with torch.set_grad_enabled(train):
-                out  = model(batch.x, batch.pos, batch.batch)
+                rei  = getattr(batch, 'radius_edge_index', None)
+                out  = model(batch.x, batch.pos, batch.batch, radius_edge_index=rei)
                 loss = criterion(out.squeeze(), batch.y.squeeze(-1))
             if train:
                 optimizer.zero_grad()

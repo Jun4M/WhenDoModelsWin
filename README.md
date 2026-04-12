@@ -1,91 +1,117 @@
-# WhenDoModelsWin
+# When Do Models Win?
+### A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes
 
-Low-data benchmarking of molecular property prediction models on the QM9 dataset.
-Investigates **when each model architecture wins** — Transformer vs. GNN vs. hybrid vs. classical ML.
+This repository contains the code and aggregated results for the paper:
 
----
+> **"When Do Models Win? A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes"**
+> *Journal of Cheminformatics* (under review)
 
-## Research Question
-
-> In low-data regimes (N=100 train), which model architecture best predicts quantum molecular properties?
+We systematically compare 11 model families across 4 molecular datasets, measuring performance as a function of training set size (N=50–3,000) to identify which models excel under data scarcity.
 
 ---
 
 ## Models
 
-| Model | Type | Description |
-|-------|------|-------------|
-| **ChemBERTa** | Transformer | `seyonec/ChemBERTa-zinc-base-v1`, fine-tuned on SMILES |
-| **GCN** | Graph Neural Network | Graph Convolutional Network on molecular graphs |
-| **GTCA** | Hybrid | GCN + ChemBERTa fusion (configurable BERT depth) |
-| **RF / XGB / GPR** | Classical ML | Fingerprint-based sklearn regressors |
-| **AttentiveFP / PaiNN / GPS** | Advanced GNN | State-of-the-art graph architectures |
+| Model | Type | Input |
+|-------|------|-------|
+| GCN | Graph Neural Network | Molecular graph |
+| AttentiveFP | Graph Neural Network | Molecular graph |
+| GPS | Graph Neural Network | Molecular graph + RWSE |
+| PaiNN | Graph Neural Network (3D) | 3D coordinates (QM9 only) |
+| ChemBERTa | Transformer | SMILES |
+| **GTCA-Cat** | GNN + Transformer (proposed) | Graph + SMILES (concatenation) |
+| **GTCA-CA** | GNN + Transformer (proposed) | Graph + SMILES (cross-attention) |
+| Random Forest | Traditional ML | ECFP4 (radius=2, 2048 bits) |
+| XGBoost | Traditional ML | ECFP4 |
+| LightGBM | Traditional ML | ECFP4 |
+| SVR | Traditional ML | ECFP4 + StandardScaler |
+| GPR | Traditional ML | ECFP4 (N≤500 only) |
 
 ---
 
-## Targets
+## Datasets
 
-QM9 quantum chemical properties:
-- `homo` — Highest Occupied Molecular Orbital energy
-- `lumo` — Lowest Unoccupied Molecular Orbital energy
-- `gap`  — HOMO-LUMO gap
+| Dataset | Task | Size | Target |
+|---------|------|------|--------|
+| QM9 | Quantum properties | ~130k | HOMO, LUMO, Gap (eV) |
+| ESOL | Aqueous solubility | ~1.1k | log mol/L |
+| Lipophilicity | Lipophilicity | ~4.2k | log D |
+| BACE | Binding affinity | ~1.5k | pIC50 |
+
+Scaffold-based splits (RDKit MurckoScaffold). Training sizes: N=50–500 (step 25, 10 seeds), N=600–1,000 (step 100, 3 seeds), N=1,500–3,000 (step 500, 3 seeds, QM9 only).
 
 ---
 
-## Setup
+## Environment
 
 ```bash
-pip install -r requirements.txt
-# For GPU:
-pip install -r requirements_gpu.txt
+conda env create -f environment.yml
+conda activate smiles
+```
+
+Key dependencies: Python 3.12, PyTorch 2.10, PyTorch Geometric 2.7, DeepChem 2.8.1, Transformers 5.2, scikit-learn 1.8, RDKit 2025.9.5. All experiments were conducted on Apple Silicon MacBook Pro (MPS backend).
+
+---
+
+## Reproducing Results
+
+### Step 1 — Run experiments
+
+```bash
+# All baseline models (GCN, ChemBERTa, AttentiveFP, GPS, RF, XGB, LGB, SVR, GPR)
+python run_learning_curve.py --dataset qm9 esol lipo bace --device mps --resume
+
+# GTCA depth ablation (bert_depth = 2, 4, 6) on QM9
+python run_depth_study.py --dataset qm9 --device mps --resume
+
+# GTCA fusion comparison (Cat vs CA) on QM9
+python run_fusion_study.py --dataset qm9 --best_depth 6 --device mps --resume
+
+# PaiNN (QM9 only — uses DFT-optimized 3D coordinates)
+python run_learning_curve.py --dataset qm9 --device mps \
+  --skip_gcn --skip_transformer --skip_rf --skip_xgb \
+  --skip_gpr --skip_svr --skip_lgbm --skip_attentivefp --skip_gps --resume
+```
+
+### Step 2 — Post-processing
+
+```bash
+python collect_std.py           # collect normalization statistics
+python denormalize_raw.py       # convert RMSE/MAE to original units
+python denormalize_gps_painn.py # denormalize GPS and PaiNN separately
+python rebuild_paper_csv.py     # aggregate into results/paper_csv/
+python regenerate_plots.py      # reproduce all paper figures
 ```
 
 ---
 
-## Usage
+## Pre-computed Results
+
+Aggregated results are available in `results/paper_csv/` — figures can be reproduced without re-running experiments:
 
 ```bash
-# Run all models on all targets
-python main.py
-
-# Specific target and device
-python main.py --target homo lumo --device cuda
-
-# Skip specific models
-python main.py --skip_transformer --skip_gcn
-
-# Custom data size
-python main.py --train_size 200 --val_size 100 --test_size 5000
+python regenerate_plots.py
 ```
 
-### Arguments
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--target` | all | `homo`, `lumo`, `gap` |
-| `--device` | auto | `cuda` / `cpu` |
-| `--train_size` | 100 | Training set size |
-| `--val_size` | 100 | Validation set size |
-| `--test_size` | 10000 | Test set size |
-| `--seed` | 42 | Random seed |
-| `--epochs_transformer` | 200 | Transformer training epochs |
-| `--epochs_gcn` | 300 | GCN training epochs |
-| `--epochs_gtca` | 200 | GTCA training epochs |
+| File | Description |
+|------|-------------|
+| `lc_qm9_all_models.csv` | QM9 learning curves, all models (eV) |
+| `lc_esol_all_models.csv` | ESOL learning curves |
+| `lc_lipo_all_models.csv` | Lipophilicity learning curves |
+| `lc_bace_all_models.csv` | BACE learning curves |
+| `ablation_gtca_depth_qm9.csv` | GTCA depth ablation (depth=2/4/6) |
+| `ablation_gtca_fusion_qm9.csv` | GTCA-Cat vs GTCA-CA comparison |
+| `stats_depth_welch_qm9.csv` | Welch t-test results (depth ablation) |
+| `stats_fusion_welch_qm9.csv` | Welch t-test results (fusion ablation) |
 
 ---
 
-## Output
+## License
 
-Results are saved to `./results/`:
-- `all_metrics.json` — MAE / RMSE / R² for all models and targets
-- Per-model failure analysis CSVs
-- Scatter plots and XAI visualizations
+MIT License
 
 ---
 
-## Stack
+## Citation
 
-- **Deep Learning**: PyTorch, PyTorch Geometric, HuggingFace Transformers
-- **Chemistry**: RDKit, DeepChem
-- **XAI**: Captum
-- **ML Baselines**: scikit-learn, XGBoost, LightGBM
+> To be added upon publication.

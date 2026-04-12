@@ -239,7 +239,7 @@ def run_one(
                 seed=seed,
             )
             save_run_csv(raw_dir, 'painn', None, seed, target, train_size, res['metrics'],
-                         n_test=len(te['X_3d']))
+                         n_test=len(te['X_graph']))
             results['painn'] = res
         except Exception as e:
             print(f"  [ERROR] PaiNN: {e}"); traceback.print_exc()

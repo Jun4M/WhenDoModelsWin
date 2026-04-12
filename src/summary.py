@@ -14,7 +14,7 @@ import pandas as pd
 
 METRICS = ['RMSE', 'MAE', 'Pearson_R', 'R2']
 
-BASELINE_MODELS = ['gcn', 'transformer', 'rf', 'xgb', 'gpr', 'lgbm', 'svr', 'attentivefp', 'gps']
+BASELINE_MODELS = ['gcn', 'transformer', 'rf', 'xgb', 'gpr', 'lgbm', 'svr', 'attentivefp', 'gps', 'painn']
 GTCA_DEPTHS     = [2, 4, 6]
 
 
