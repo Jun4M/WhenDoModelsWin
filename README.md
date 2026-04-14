@@ -6,7 +6,7 @@ This repository contains the code and aggregated results for the paper:
 > **"When Do Models Win? A Learning Curve Benchmark for Molecular Property Prediction in Low-Data Regimes"**
 > *Journal of Cheminformatics* (under review)
 
-We systematically compare 11 model families across 4 molecular datasets, measuring performance as a function of training set size (N=50–3,000) to identify which models excel under data scarcity.
+We systematically compare 10 model families across 4 molecular datasets, measuring performance as a function of training set size (N=50–3,000) to identify which models excel under data scarcity.
 
 ---
 
@@ -17,7 +17,6 @@ We systematically compare 11 model families across 4 molecular datasets, measuri
 | GCN | Graph Neural Network | Molecular graph |
 | AttentiveFP | Graph Neural Network | Molecular graph |
 | GPS | Graph Neural Network | Molecular graph + RWSE |
-| PaiNN | Graph Neural Network (3D) | 3D coordinates (QM9 only) |
 | ChemBERTa | Transformer | SMILES |
 | **GTCA-Cat** | GNN + Transformer (proposed) | Graph + SMILES (concatenation) |
 | **GTCA-CA** | GNN + Transformer (proposed) | Graph + SMILES (cross-attention) |
@@ -68,11 +67,6 @@ python run_depth_study.py --dataset qm9 --device mps --resume
 # Note: do not pass --train_sizes; defaults (50–500 step 25, 600–1000 step 100, 1500–3000 step 500)
 # exactly match the train sizes used in the paper.
 python run_fusion_study.py --dataset qm9 --best_depth 6 --device mps --resume
-
-# PaiNN (QM9 only — uses DFT-optimized 3D coordinates)
-python run_learning_curve.py --dataset qm9 --device mps \
-  --skip_gcn --skip_transformer --skip_rf --skip_xgb \
-  --skip_gpr --skip_svr --skip_lgbm --skip_attentivefp --skip_gps --resume
 ```
 
 ### Step 2 — Post-processing
@@ -80,7 +74,7 @@ python run_learning_curve.py --dataset qm9 --device mps \
 ```bash
 python collect_std.py           # collect normalization statistics
 python denormalize_raw.py       # convert RMSE/MAE to original units
-python denormalize_gps_painn.py # denormalize GPS and PaiNN separately
+python denormalize_gps_painn.py # denormalize GPS separately
 python rebuild_paper_csv.py     # aggregate into results/paper_csv/
 python regenerate_plots.py      # reproduce all paper figures
 ```
