@@ -220,21 +220,21 @@ def _precompute_radius_graph(pos: 'torch.Tensor', cutoff: float = 5.0,
     n = pos.shape[0]
     if n <= 1:
         return torch.zeros(2, 0, dtype=torch.long)
-    dist2 = torch.cdist(pos, pos)          # (N, N)
-    dist2.fill_diagonal_(float('inf'))
-    adj = dist2 < cutoff * cutoff           # exclude self-loops
+    dist = torch.cdist(pos, pos)            # (N, N) Euclidean distances
+    dist.fill_diagonal_(float('inf'))
+    adj = dist < cutoff                     # exclude self-loops
     if max_num_neighbors < n - 1:
         # cap per destination node
         for dst in range(n):
             nbrs = adj[:, dst].nonzero(as_tuple=True)[0]
             if len(nbrs) > max_num_neighbors:
-                dists = dist2[nbrs, dst]
+                dists = dist[nbrs, dst]
                 keep = nbrs[dists.argsort()[:max_num_neighbors]]
                 mask = torch.ones(n, dtype=torch.bool)
                 mask[keep] = False
                 mask[dst]  = False          # keep dst itself masked
                 adj[mask, dst] = False
-    src, dst = adj.nonzero(as_tuple=True)
+    src, dst = adj.nonzero(as_tuple=True)  # noqa: F841 (dst reused as loop var above)
     return torch.stack([src, dst], dim=0)
 
 def load_qm9_3d_from_sdf(smiles_list: list, sdf_path: str = './data/qm9.sdf') -> tuple:

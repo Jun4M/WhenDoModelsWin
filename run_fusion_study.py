@@ -148,7 +148,10 @@ def main():
     print(f"Datasets:    {args.dataset}")
     print(f"Best depth:  {depth}")
     print(f"Fusion:      {fusion_models}")
-    print(f"Train sizes ({len(sizes)}): {sizes[:5]}{'...' if len(sizes) > 5 else ''}")
+    if sizes is not None:
+        print(f"Train sizes ({len(sizes)}): {sizes[:5]}{'...' if len(sizes) > 5 else ''}")
+    else:
+        print("Train sizes: default per-dataset (50–500 step 25, 600–1000 step 100, 1500+ step 500)")
     print()
 
     for dataset in args.dataset:

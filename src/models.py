@@ -540,17 +540,17 @@ class PaiNNRegressor(nn.Module):
         for b in batch.unique():
             mask = (batch == b).nonzero(as_tuple=True)[0]
             p = pos[mask]                                    # (n, 3)
-            dist2 = torch.cdist(p, p)                       # (n, n)
+            dist = torch.cdist(p, p)                        # (n, n) Euclidean distances
             # exclude self-loops
-            dist2.fill_diagonal_(float('inf'))
-            adj = dist2 < r * r
+            dist.fill_diagonal_(float('inf'))
+            adj = dist < r
             local_src, local_dst = adj.nonzero(as_tuple=True)
             # cap neighbors
             if max_num_neighbors < p.shape[0] - 1:
                 for node in range(p.shape[0]):
                     nbrs = (local_dst == node).nonzero(as_tuple=True)[0]
                     if len(nbrs) > max_num_neighbors:
-                        keep = nbrs[dist2[local_src[nbrs], node].argsort()[:max_num_neighbors]]
+                        keep = nbrs[dist[local_src[nbrs], node].argsort()[:max_num_neighbors]]
                         drop = nbrs[~torch.isin(nbrs, keep)]
                         adj[local_src[drop], node] = False
                 local_src, local_dst = adj.nonzero(as_tuple=True)

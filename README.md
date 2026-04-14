@@ -65,6 +65,8 @@ python run_learning_curve.py --dataset qm9 esol lipo bace --device mps --resume
 python run_depth_study.py --dataset qm9 --device mps --resume
 
 # GTCA fusion comparison (Cat vs CA) on QM9
+# Note: do not pass --train_sizes; defaults (50–500 step 25, 600–1000 step 100, 1500–3000 step 500)
+# exactly match the train sizes used in the paper.
 python run_fusion_study.py --dataset qm9 --best_depth 6 --device mps --resume
 
 # PaiNN (QM9 only — uses DFT-optimized 3D coordinates)
