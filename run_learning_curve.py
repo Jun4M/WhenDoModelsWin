@@ -12,7 +12,7 @@ Seed schedule:
   train_size >  500 : 3  seeds (0-2)
 
 Models (baselines):
-  gcn, transformer, rf, xgb, gpr, attentivefp, painn, gps
+  gcn, transformer, rf, xgb, gpr, attentivefp, gps
 
 Results structure:
   results/
@@ -24,7 +24,7 @@ Results structure:
 Usage:
   python run_learning_curve.py --dataset qm9 --target homo lumo gap --device mps
   python run_learning_curve.py --dataset esol --target all --device mps --resume
-  python run_learning_curve.py --dataset qm9 --skip_painn --skip_gps \\
+  python run_learning_curve.py --dataset qm9 --skip_gps \\
       --epochs_gcn 5 --epochs_transformer 5 --epochs_gtca 5  # smoke test
 """
 
@@ -112,7 +112,6 @@ def run_one(
     skip_svr: bool,
     skip_lgbm: bool,
     skip_attentivefp: bool,
-    skip_painn: bool,
     skip_gps: bool,
     log_dir: str = None,
     resume: bool = False,
@@ -127,7 +126,6 @@ def run_one(
             torch.mps.empty_cache()
 
     need_ecfp = not (skip_rf and skip_xgb and skip_gpr and skip_svr and skip_lgbm)
-    need_3d   = not skip_painn
 
     data = load_dataset_splits(
         dataset=dataset,
@@ -138,7 +136,6 @@ def run_one(
         seed=seed,
         target=target,
         featurize_ecfp=need_ecfp,
-        featurize_3d=need_3d,
         preloaded_raw=preloaded_raw,
     )
 
@@ -224,25 +221,6 @@ def run_one(
             print(f"  [ERROR] GPS: {e}"); traceback.print_exc()
         finally:
             clear_memory()
-
-    # PaiNN (3D)
-    if not skip_painn and not (resume and run_already_done(raw_dir, 'painn', None, seed, target, train_size)) and tr['X_3d'] is not None and len(tr['X_3d']) > 0:
-        try:
-            from src.train import train_painn
-            vi_tr = tr['X_3d_valid_idx'] or list(range(len(tr['X_3d'])))
-            vi_va = va['X_3d_valid_idx'] or list(range(len(va['X_3d'])))
-            vi_te = te['X_3d_valid_idx'] or list(range(len(te['X_3d'])))
-            res = train_painn(
-                tr['X_3d'], va['X_3d'], te['X_3d'],
-                train_y[np.array(vi_tr)], val_y[np.array(vi_va)], test_y[np.array(vi_te)],
-                target_name=target, device=device, log_path=log_path_for('painn'),
-                seed=seed,
-            )
-            save_run_csv(raw_dir, 'painn', None, seed, target, train_size, res['metrics'],
-                         n_test=len(te['X_graph']))
-            results['painn'] = res
-        except Exception as e:
-            print(f"  [ERROR] PaiNN: {e}"); traceback.print_exc()
 
     # RF
     if not skip_rf and not (resume and run_already_done(raw_dir, 'rf', None, seed, target, train_size)) and tr['X_ecfp'] is not None:
@@ -350,7 +328,6 @@ def parse_args():
     p.add_argument('--skip_svr',         action='store_true')
     p.add_argument('--skip_lgbm',        action='store_true')
     p.add_argument('--skip_attentivefp', action='store_true')
-    p.add_argument('--skip_painn',       action='store_true')
     p.add_argument('--skip_gps',         action='store_true')
 
     # Control
@@ -449,7 +426,6 @@ def main():
                             skip_svr=args.skip_svr,
                             skip_lgbm=args.skip_lgbm,
                             skip_attentivefp=args.skip_attentivefp,
-                            skip_painn=args.skip_painn,
                             skip_gps=args.skip_gps,
                             log_dir=log_dir,
                             resume=args.resume,

@@ -1,7 +1,7 @@
 """
 data_loader.py
 Unified dataset loader for QM9, ESOL, Lipophilicity, BACE.
-Supports graph, ECFP4, and 3D featurization.
+Supports graph and ECFP4 featurization.
 """
 
 import ssl
@@ -17,8 +17,6 @@ from src.featurizer import (
     canonicalize_and_filter,
     featurize_smiles_to_graphs,
     featurize_smiles_to_ecfp,
-    featurize_smiles_to_3d,
-    load_qm9_3d_from_sdf,
     build_pyg_list,
 )
 
@@ -212,7 +210,7 @@ def _scaffold_split(smiles: list, y: np.ndarray, train_size: int, val_size: int,
 # ---------------------------------------------------------------------------
 
 def _build_split_dict(smiles_list: list, y_col: np.ndarray,
-                       featurize_ecfp: bool = False, featurize_3d: bool = False,
+                       featurize_ecfp: bool = False,
                        dataset: str = '', seed: int = 0) -> dict:
     """Canonicalize + featurize. Returns aligned dict."""
     can_smiles, can_valid = canonicalize_and_filter(smiles_list)
@@ -226,8 +224,6 @@ def _build_split_dict(smiles_list: list, y_col: np.ndarray,
     result = {
         'X_graph': X_graph,
         'X_ecfp':  None,
-        'X_3d':    None,
-        'X_3d_valid_idx': None,
         'y':   y_graph,
         'ids': smi_graph,
         'n':   len(smi_graph),
@@ -236,15 +232,6 @@ def _build_split_dict(smiles_list: list, y_col: np.ndarray,
     if featurize_ecfp:
         ecfp_mat, _ = featurize_smiles_to_ecfp(smi_graph)
         result['X_ecfp'] = ecfp_mat
-
-    if featurize_3d:
-        if dataset == 'qm9':
-            # Use DFT-optimized coordinates from SDF (more accurate than ETKDG)
-            pyg_3d, valid_3d = load_qm9_3d_from_sdf(smi_graph)
-        else:
-            pyg_3d, valid_3d = featurize_smiles_to_3d(smi_graph, seed=seed)
-        result['X_3d'] = pyg_3d
-        result['X_3d_valid_idx'] = valid_3d
 
     return result
 
@@ -298,13 +285,12 @@ def load_dataset_splits(
     seed: int = 42,
     target: str = None,
     featurize_ecfp: bool = False,
-    featurize_3d: bool = False,
     preloaded_raw=None,  # (smiles, y_col, task_pos) from load_raw_data()
 ) -> dict:
     """
     Unified dataset loader. Returns:
     {
-      'train': {'X_graph', 'X_ecfp', 'X_3d', 'y', 'ids', 'n'},
+      'train': {'X_graph', 'X_ecfp', 'y', 'ids', 'n'},
       'val':   {...},
       'test':  {...},
       'stats': (mean, std),
@@ -375,9 +361,9 @@ def load_dataset_splits(
     val_y_n   = (val_y   - mean) / std
     test_y_n  = (test_y  - mean) / std
 
-    train_ds = _build_split_dict(train_smi, train_y_n, featurize_ecfp, featurize_3d, dataset, seed)
-    val_ds   = _build_split_dict(val_smi,   val_y_n,   featurize_ecfp, featurize_3d, dataset, seed)
-    test_ds  = _build_split_dict(test_smi,  test_y_n,  featurize_ecfp, featurize_3d, dataset, seed)
+    train_ds = _build_split_dict(train_smi, train_y_n, featurize_ecfp, dataset, seed)
+    val_ds   = _build_split_dict(val_smi,   val_y_n,   featurize_ecfp, dataset, seed)
+    test_ds  = _build_split_dict(test_smi,  test_y_n,  featurize_ecfp, dataset, seed)
 
     print(f"[data_loader] After feat: train={train_ds['n']}, val={val_ds['n']}, test={test_ds['n']}")
 

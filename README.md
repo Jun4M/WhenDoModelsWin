@@ -74,7 +74,6 @@ python run_fusion_study.py --dataset qm9 --best_depth 6 --device mps --resume
 ```bash
 python collect_std.py           # collect normalization statistics
 python denormalize_raw.py       # convert RMSE/MAE to original units
-python denormalize_gps_painn.py # denormalize GPS separately
 python rebuild_paper_csv.py     # aggregate into results/paper_csv/
 python regenerate_plots.py      # reproduce all paper figures
 ```

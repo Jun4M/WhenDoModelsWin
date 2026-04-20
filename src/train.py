@@ -5,7 +5,7 @@ Training loops for all models.
 - TrainingLogger: weight norms + gradient noise (every 10 epochs)
 - EarlyStopping: best val loss, NO disk .pt save by default
 - train_transformer, train_gcn, train_gtca
-- train_attentivefp, train_painn, train_gps
+- train_attentivefp, train_gps
 - train_sklearn (RF / XGB / GPR)
 """
 
@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 
 from src.models import (
     ChemBERTaRegressor, GCNRegressor, GTCAHybrid, GTCACrossAttn,
-    AttentiveFPRegressor, PaiNNRegressor, GPSRegressor,
+    AttentiveFPRegressor, GPSRegressor,
     SklearnRegressorWrapper,
     get_tokenizer, tokenize_smiles,
 )
@@ -527,87 +527,6 @@ def train_attentivefp(
     _, test_preds, test_true = run_epoch(test_loader, train=False)
     metrics = compute_metrics(test_true, test_preds)
     print(f"  [AttentiveFP] {metrics}")
-
-    return {"model": model, "metrics": metrics, "test_preds": test_preds, "test_true": test_true}
-
-
-# ===========================================================================
-# PaiNN (3D)
-# ===========================================================================
-
-def train_painn(
-    train_3d, val_3d, test_3d,
-    train_y, val_y, test_y,
-    target_name: str = 'target',
-    epochs: int = 300,
-    batch_size: int = 32,
-    lr: float = 1e-3,
-    patience: int = 30,
-    device: str = 'cpu',
-    log_path: str = None,
-    seed: int = 0,
-) -> dict:
-    """
-    train_3d/val_3d/test_3d: list of PyG Data with .pos attribute.
-    y values attached separately (already aligned).
-    """
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    for d, y in zip(train_3d, train_y):
-        d.y = torch.tensor([float(y)])
-    for d, y in zip(val_3d, val_y):
-        d.y = torch.tensor([float(y)])
-    for d, y in zip(test_3d, test_y):
-        d.y = torch.tensor([float(y)])
-
-    train_loader = PyGDataLoader(train_3d, batch_size=batch_size, shuffle=True)
-    val_loader   = PyGDataLoader(val_3d,   batch_size=batch_size)
-    test_loader  = PyGDataLoader(test_3d,  batch_size=256)
-
-    model     = PaiNNRegressor().to(device)
-    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = ReduceLROnPlateau(optimizer, patience=15, factor=0.5)
-    criterion = nn.MSELoss()
-    es        = EarlyStopping(patience=patience)
-    logger    = TrainingLogger(log_path=log_path)
-
-    def run_epoch(loader, train=True):
-        model.train() if train else model.eval()
-        total_loss, preds, labels = 0.0, [], []
-        for batch in loader:
-            batch = batch.to(device)
-            with torch.set_grad_enabled(train):
-                rei  = getattr(batch, 'radius_edge_index', None)
-                out  = model(batch.x, batch.pos, batch.batch, radius_edge_index=rei)
-                loss = criterion(out.squeeze(), batch.y.squeeze(-1))
-            if train:
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-            total_loss += loss.item() * batch.num_graphs
-            preds.extend(out.detach().cpu().numpy())
-            labels.extend(batch.y.reshape(-1).cpu().numpy())
-        return total_loss / len(loader.dataset), np.array(preds), np.array(labels)
-
-    print(f"\n=== PaiNN ({target_name}) ===")
-    for epoch in range(1, epochs + 1):
-        train_loss, _, _ = run_epoch(train_loader, train=True)
-        val_loss,   _, _ = run_epoch(val_loader,   train=False)
-        scheduler.step(val_loss)
-        logger.maybe_log(epoch, model, train_loss, val_loss)
-        if epoch % 30 == 0:
-            print(f"  Epoch {epoch:4d} | train={train_loss:.4f} | val={val_loss:.4f}")
-        if es.step(val_loss, model):
-            print(f"  Early stop @ epoch {epoch}")
-            break
-
-    es.restore(model)
-    logger.save()
-
-    _, test_preds, test_true = run_epoch(test_loader, train=False)
-    metrics = compute_metrics(test_true, test_preds)
-    print(f"  [PaiNN] {metrics}")
 
     return {"model": model, "metrics": metrics, "test_preds": test_preds, "test_true": test_true}
 
