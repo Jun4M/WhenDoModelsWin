@@ -101,6 +101,12 @@ python regenerate_plots.py
 
 ---
 
+## Notes
+
+This repository reflects the exact codebase used for the results reported in the paper.
+
+---
+
 ## License
 
 MIT License
