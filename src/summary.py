@@ -14,7 +14,7 @@ import pandas as pd
 
 METRICS = ['RMSE', 'MAE', 'Pearson_R', 'R2']
 
-BASELINE_MODELS = ['gcn', 'transformer', 'rf', 'xgb', 'gpr', 'lgbm', 'svr', 'attentivefp', 'gps']
+BASELINE_MODELS = ['gcn', 'transformer', 'chemberta2', 'molformer', 'selformer', 'chemprop', 'krovex', 'rf', 'xgb', 'gpr', 'lgbm', 'svr', 'attentivefp', 'attentivefp_mtl', 'gcn_mtl', 'unimol_scratch', 'unimol_pt', 'gps', 'painn']
 GTCA_DEPTHS     = [2, 4, 6]
 
 
@@ -82,15 +82,74 @@ def save_run_csv(
 # ---------------------------------------------------------------------------
 
 def run_already_done(raw_dir: str, model: str, depth, seed: int,
-                      target: str, train_size: int) -> bool:
+                      target: str, train_size: int,
+                      *, check_predictions: bool = False,
+                      pred_dir: str = None,
+                      target_safe: str = None) -> bool:
+    """Returns True if this (model, seed, target, train_size) cell can be skipped.
+
+    When check_predictions=True (i.e., --resume --save_predictions),
+    requires both the CSV row AND prediction npz to exist.
+    CSV-only cells are re-trained so the npz gets created.
+    """
     path = raw_csv_path(raw_dir, model, depth, seed, target)
     if not os.path.exists(path):
         return False
     try:
         df = pd.read_csv(path)
-        return int(train_size) in df['train_size'].values
+        csv_done = int(train_size) in df['train_size'].values
     except Exception:
         return False
+
+    if not csv_done:
+        return False
+    if not check_predictions:
+        return True  # original behaviour
+
+    # Also require prediction npz
+    if target_safe is None:
+        target_safe = target.replace(' ', '_').replace('/', '_')
+    kind = str(depth) if depth is not None else 'na'
+    fname = f'{model}_{kind}_{seed}_{target_safe}_n{train_size}.npz'
+    return os.path.exists(os.path.join(pred_dir, fname))
+
+
+# ---------------------------------------------------------------------------
+# Save prediction arrays (--save_predictions flag)
+# ---------------------------------------------------------------------------
+
+def save_predictions_npz(res, *, model, pred_dir, model_kind,
+                          seed, target, train_size, y_mean=None, y_std=None):
+    """Save normalized test_preds + test_true (+ denorm stats) to .npz for ensemble.
+
+    Output: {pred_dir}/{model}_{model_kind}_{seed}_{target_safe}_n{train_size}.npz
+    NPZ keys: test_preds, test_true (float32, normalized), y_mean, y_std (scalar or array).
+    Silently skips if res is None or keys are missing (e.g. GPR > 500).
+    """
+    if res is None:
+        return
+    if 'test_preds' not in res or 'test_true' not in res:
+        return
+
+    preds = np.asarray(res['test_preds'])
+    truth = np.asarray(res['test_true'])
+    if preds.shape != truth.shape:
+        print(f'  [warn] save_predictions shape mismatch {model}: '
+              f'preds={preds.shape}, true={truth.shape}')
+        return
+
+    os.makedirs(pred_dir, exist_ok=True)
+    target_safe = target.replace(' ', '_').replace('/', '_')
+    fname = f'{model}_{model_kind}_{seed}_{target_safe}_n{train_size}.npz'
+    out_path = os.path.join(pred_dir, fname)
+
+    np.savez_compressed(
+        out_path,
+        test_preds=preds.astype(np.float32),
+        test_true=truth.astype(np.float32),
+        y_mean=np.asarray(y_mean) if y_mean is not None else np.array(np.nan),
+        y_std =np.asarray(y_std)  if y_std  is not None else np.array(np.nan),
+    )
 
 
 # ---------------------------------------------------------------------------

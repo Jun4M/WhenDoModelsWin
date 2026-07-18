@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from src.data_loader import load_dataset_splits, DATASET_CONFIGS
 from src.train import train_gtca, train_gtca_ca
+from src.summary import save_predictions_npz
 
 
 DATASET_DIRS = {
@@ -63,13 +64,23 @@ def get_seed_schedule(train_size: int) -> list:
 
 
 def run_already_done(fusion_raw_dir: str, model_tag: str, depth: int,
-                     seed: int, target: str, train_size: int) -> bool:
+                     seed: int, target: str, train_size: int,
+                     check_predictions: bool = False, pred_dir: str = None,
+                     target_safe: str = None) -> bool:
     """Check if this (model_tag, depth, seed, target, train_size) is saved."""
     csv = os.path.join(fusion_raw_dir, f"{model_tag}_{depth}_{seed}_{target}.csv")
     if not os.path.exists(csv):
         return False
     df = pd.read_csv(csv)
-    return int(train_size) in df['train_size'].values
+    csv_done = int(train_size) in df['train_size'].values
+    if not csv_done:
+        return False
+    if not check_predictions:
+        return True
+    if target_safe is None:
+        target_safe = target.replace(' ', '_').replace('/', '_')
+    fname = f'{model_tag}_{depth}_{seed}_{target_safe}_n{train_size}.npz'
+    return os.path.exists(os.path.join(pred_dir, fname))
 
 
 def save_fusion_csv(fusion_raw_dir: str, model_tag: str, depth: int,
@@ -104,6 +115,7 @@ def load_data(dataset, data_dir, train_size, seed, target):
         tr['ids'],     va['ids'],     te['ids'],
         tr['y'],       va['y'],       te['y'],
         len(te['X_graph']),
+        data['stats'],  # (mean, std) for npz denorm metadata
     )
 
 
@@ -131,6 +143,9 @@ def parse_args():
     p.add_argument('--train_sizes', nargs='+', type=int, default=None)
     p.add_argument('--skip_cat',   action='store_true', help="Skip GTCA-Cat runs")
     p.add_argument('--skip_ca',    action='store_true', help="Skip GTCA-CA runs")
+    p.add_argument('--save_predictions', action='store_true',
+                   help='Save test_preds + test_true as .npz for ensemble analysis. '
+                        'Output: {results_root}/{ds_dir}/predictions/')
     return p.parse_args()
 
 
@@ -162,7 +177,10 @@ def main():
         dataset_dir  = os.path.join(args.results_root, DATASET_DIRS.get(dataset, dataset))
         fusion_dir   = os.path.join(dataset_dir, 'fusion_study')
         fusion_raw   = os.path.join(fusion_dir, 'raw_data')
+        pred_dir     = os.path.join(dataset_dir, 'predictions') if args.save_predictions else None
         os.makedirs(fusion_raw, exist_ok=True)
+        if pred_dir:
+            os.makedirs(pred_dir, exist_ok=True)
 
         for target in targets:
             print(f"\n{'='*60}")
@@ -170,6 +188,8 @@ def main():
             print(f"{'='*60}")
 
             all_rows = []
+
+            target_safe = target.replace(' ', '_').replace('/', '_')
 
             for model_tag in fusion_models:
                 print(f"\n  --- {model_tag} ---")
@@ -179,7 +199,9 @@ def main():
 
                     for seed in seeds:
                         if args.resume and run_already_done(
-                                fusion_raw, model_tag, depth, seed, target, train_size):
+                                fusion_raw, model_tag, depth, seed, target, train_size,
+                                check_predictions=args.save_predictions,
+                                pred_dir=pred_dir, target_safe=target_safe):
                             print(f"    [resume] {model_tag} size={train_size} seed={seed} — skip")
                             continue
 
@@ -187,7 +209,8 @@ def main():
                         try:
                             (train_pyg, val_pyg, test_pyg,
                              train_smi, val_smi, test_smi,
-                             train_y, val_y, test_y, n_test) = load_data(
+                             train_y, val_y, test_y, n_test,
+                             stats) = load_data(
                                 dataset, args.data_dir, train_size, seed, target)
 
                             node_feat_dim = train_pyg[0].x.shape[1] if train_pyg else 30
@@ -222,6 +245,13 @@ def main():
                             m = res['metrics']
                             save_fusion_csv(fusion_raw, model_tag, depth,
                                             seed, target, train_size, m, n_test)
+                            if args.save_predictions:
+                                save_predictions_npz(
+                                    res, model=model_tag, pred_dir=pred_dir,
+                                    model_kind=str(depth),
+                                    seed=seed, target=target, train_size=train_size,
+                                    y_mean=stats[0], y_std=stats[1],
+                                )
                             all_rows.append({
                                 'model':      model_tag,
                                 'train_size': train_size,

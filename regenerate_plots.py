@@ -39,6 +39,7 @@ MODEL_COLORS = {
     'lgbm':         '#C0392B',
     'svr':          '#95A5A6',
     'gps':          '#7F8C8D',
+    'painn':        '#56B4E9',
     'gtca_depth_2': '#E74C3C',
     'gtca_depth_4': '#3B82C4',
     'gtca_depth_6': '#2EAB6E',
@@ -56,6 +57,7 @@ MODEL_LABELS = {
     'lgbm':         'LightGBM',
     'svr':          'SVR',
     'gps':          'GPS',
+    'painn':        'PaiNN',
     'gtca_depth_2': 'GTCA (depth=2)',
     'gtca_depth_4': 'GTCA (depth=4)',
     'gtca_depth_6': 'GTCA (depth=6)',
@@ -104,14 +106,11 @@ def _draw_lc(ax, df, metric, ylabel=None, title='', use_ci=False, show_legend=Tr
         label = MODEL_LABELS.get(model, model)
         x = sub['train_size'].values
         y = sub[mean_col].values
+        yerr = sub[ci_col].fillna(0).values if ci_col in sub.columns else np.zeros_like(y)
 
-        ax.plot(x, y, color=color, label=label, linewidth=1.8,
-                marker='o', markersize=4)
-
-        if ci_col in sub.columns:
-            yerr = sub[ci_col].fillna(0).values
-            if not np.all(yerr == 0):
-                ax.fill_between(x, y - yerr, y + yerr, alpha=0.15, color=color)
+        ax.errorbar(x, y, yerr=yerr, color=color, label=label,
+                    linewidth=1.8, marker='o', markersize=4,
+                    capsize=2, elinewidth=0.7)
 
     ax.set_xlabel('Training set size', fontsize=10)
     ax.set_ylabel(ylabel or METRIC_LABELS.get(metric, metric), fontsize=10)
@@ -234,7 +233,7 @@ def plot_paper_rmse(df, out_path, title, ylabel, use_ci=False):
     ax.set_ylabel(ylabel, fontsize=12)
     ax.tick_params(labelsize=10)
     ax.legend(fontsize=9, loc='upper right')
-    _save(fig, out_path, dpi=200)
+    _save(fig, out_path, dpi=300)
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +418,7 @@ def main():
         for ax, (df, ttl) in zip(axes.flat, panels_data):
             yl = ylabel_map[ttl] if ylabel_map else None
             _draw_lc(ax, df, metric, ylabel=yl, title=ttl)
-        _save(fig, os.path.join(PAPER_PLOTS, fname), dpi=200)
+        _save(fig, os.path.join(PAPER_PLOTS, fname), dpi=300)
 
     # ====================================================================
     print('\n=== Paper Figures (Fig 3–9, 11–13) ===')

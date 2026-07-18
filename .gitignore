@@ -1,1 +1,51 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv*/
+venv/
+env/
+
+# Large data files (download separately — see README)
+data/qm9.sdf
+data/qm9-featurized/
+data/*-3d-cache.pkl
+
+# Experiment results (raw_data, predictions; paper_csv is tracked)
+results/*/raw_data/
+results/*/raw_data_*/
+results/*/predictions/
+results/*/plots/
+results/*/summary/
+results/*/depth_study/
+results/*/fusion_study/
+results/paper_plots/
+results/scatter_plots/
+results/scatter_predictions/
+results/colab_*/
+results/results_*/
+results/*_backup*/
+results/*_rerun*/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+logs/
+nohup.out
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
