@@ -1,8 +1,8 @@
 """
 rebuild_paper_csv.py
-De-normalized raw_data로부터 paper_csv 파일들을 전부 재생성.
+Regenerate all paper_csv files from de-normalized raw_data.
 
-생성 파일:
+Generated files:
   paper_csv/lc_{dataset}_all_models.csv       — baselines + gtca_cat
   paper_csv/ablation_gtca_fusion_qm9.csv      — gtca_cat vs gtca_ca (QM9)
   paper_csv/ablation_gtca_depth_qm9.csv       — depth ablation (QM9)
@@ -10,9 +10,9 @@ De-normalized raw_data로부터 paper_csv 파일들을 전부 재생성.
   paper_csv/stats_fusion_welch_qm9.csv        — Welch t-test fusion
   paper_csv/stats_depth_welch_qm9.csv         — Welch t-test depth
 
-Pearson_R, R2는 scale-invariant → 재계산 불필요.
-RMSE, MAE는 이미 raw_data에서 de-normalize 완료.
-QM9(homo/lumo/gap)은 DeepChem이 Hartree 반환 → paper_csv 생성 시 ×27.2114로 eV 변환.
+Pearson_R, R2 are scale-invariant → no recomputation needed.
+RMSE, MAE are already de-normalized in raw_data.
+QM9 (homo/lumo/gap): DeepChem returns Hartree → converted to eV (×27.2114) when building paper_csv.
 """
 
 import os

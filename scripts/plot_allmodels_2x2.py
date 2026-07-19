@@ -8,7 +8,7 @@ Per-target all-model 2×2 learning-curve figures (4 figures):
   ESOL      → allmodels_2x2_esol.{png,pdf}
 
 2×2 panels: RMSE | MAE / Pearson R | R²
-Error bars: ±1 SD via ax.errorbar — fill_between 금지 (Spec 11).
+Error bars: ±1 SD via ax.errorbar — no fill_between (Spec 11).
 Shared figure legend at bottom (ncol=5, fontsize 7).
 Style: regenerate_plots.py (linewidth=1.8, markersize=4, grid alpha=0.3, dpi=300).
 """

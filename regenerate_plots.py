@@ -1,13 +1,13 @@
 """
 regenerate_plots.py
-새 de-normalized paper_csv 기반으로 논문 모든 그래프 재생성.
+Regenerate all paper figures from the new de-normalized paper_csv.
 
-생성 파일:
+Generated files:
   results/01_QM9/plots/  — baselines LC (homo/lumo/gap), depth ablation, fusion, final
   results/02_ESOL/plots/ — baselines LC + combined
   results/03_Lipo/plots/ — baselines LC + combined
   results/04_BACE/plots/ — baselines LC + combined
-  results/paper_plots/   — 논문 제출용 고해상도 PNG (각 데이터셋 RMSE만)
+  results/paper_plots/   — high-resolution PNGs for submission (RMSE only, per dataset)
 """
 
 import os
@@ -175,7 +175,7 @@ def plot_depth_ablation(df, plots_dir, target, dataset='qm9'):
                  title=METRIC_LABELS[metric])
     _save(fig, os.path.join(plots_dir, f'plot_gtca_depth_lc_{target}.png'))
 
-    # RMSE only (논문 Fig용)
+    # RMSE only (for paper figure)
     fig, ax = plt.subplots(figsize=(7, 5))
     _draw_lc(ax, df, 'RMSE', ylabel=ylabel, title=title)
     _save(fig, os.path.join(plots_dir, f'plot_gtca_depth_rmse_{target}.png'))
