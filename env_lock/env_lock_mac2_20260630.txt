@@ -1,4 +1,4 @@
-# env_lock — junho-MacBook (Apple Silicon), .venv python3.12
+# env_lock — mac2 (Apple Silicon), .venv python3.12
 # purpose: Lipophilicity CB-2 / MoLFormer / SELFormer single-environment re-run (2026-06-30)
 # note: reconstructed from installed dist-info/egg-info metadata (equivalent to pip freeze versions)
 # ---

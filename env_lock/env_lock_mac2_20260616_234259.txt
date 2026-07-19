@@ -1,6 +1,6 @@
-=== env_lock: junho-Mac (Apple Silicon) ===
+=== env_lock: mac2 (Apple Silicon) ===
 Date: 2026-06-16 23:42:59
-Machine: junho-MacBook (Apple M-series, MPS)
+Machine: mac2 (Apple M-series, MPS)
 Python: Python 3.12.4
 
 === pip freeze ===
