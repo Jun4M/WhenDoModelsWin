@@ -202,8 +202,8 @@ Contact the authors for access.
 
 | File prefix | Environment |
 |-------------|-------------|
-| `env_lock_mac1_*` | Workstation 1 (Apple M-series, MPS) |
-| `env_lock_mac2_*` | Workstation 2 (Apple M-series, MPS/CPU) |
+| `env_lock_mac1_*` | Workstation 1 (Apple M-series, MPS/CPU) |
+| `env_lock_mac2_*` | Workstation 2 (Apple M-series, MPS) |
 | `env_lock_colab_*` | Google Colab (NVIDIA L4/T4, CUDA) |
 | `env_lock_unimol_dev_*` | Colab + unimol-tools dev environment |
 
