@@ -1,0 +1,35 @@
+# Core
+numpy==1.26.4
+pandas==3.0.1
+scipy==1.17.1
+matplotlib==3.10.8
+scikit-learn==1.8.0
+
+# ML models
+xgboost==3.2.0
+lightgbm==4.6.0
+
+# Deep learning
+torch==2.10.0
+torchvision==0.25.0
+torchaudio==2.10.0
+torch-geometric==2.7.0
+
+# Chemistry
+rdkit==2025.9.5
+deepchem==2.8.1.dev20260220202610
+
+# NLP / Transformer
+transformers==5.2.0
+
+# XAI
+captum==0.8.0
+
+# SELFIES (SELFormer)
+selfies==2.1.1
+
+# D-MPNN (Chemprop, Reviewer 1 #2)
+chemprop>=2.0.0
+
+# KROVEX descriptor selection (mendeleev periodic table)
+mendeleev>=0.14
