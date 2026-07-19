@@ -189,7 +189,11 @@ Contact the authors for access.
 
 ## Environment Snapshots
 
-`env_lock/` contains `pip freeze` outputs for each machine and session used in the experiments:
+`requirements.txt` reproduces the environment for a fresh install, but the exact package
+versions actually used drifted slightly across machines and Colab sessions over the course
+of the project. `env_lock/` is the authoritative record of what every run used — one
+snapshot per machine/session (`pip freeze`, with one conda-export `.yml`). Consult it when
+you need the precise versions behind a specific result rather than the install pins:
 
 | File prefix | Environment |
 |-------------|-------------|
