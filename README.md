@@ -147,6 +147,18 @@ python scripts/plot_ensemble_analysis.py
 python scripts/ensemble_analysis.py
 ```
 
+### Scatter / XAI figures (supplementary)
+
+Two-step workflow — the first script trains the representative models and
+saves per-molecule predictions + weights to `results/scatter_predictions/`;
+the second reads those to render the scatter plots, representative-molecule
+tables, and XAI (saliency / attention) figures.
+
+```bash
+python run_scatter_predictions.py   # → results/scatter_predictions/*.csv, *_weights.pt
+python generate_scatter_xai.py      # → scatter plots + XAI figures (PNG/PDF)
+```
+
 ---
 
 ## Tests
