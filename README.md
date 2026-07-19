@@ -38,23 +38,14 @@ All splits use RDKit Murcko scaffold splitting; split keys are cached in `data/*
 
 ## Installation
 
-### Option A — pip
-
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Option B — conda
-
-```bash
-conda env create -f environment.yml
-conda activate smiles
-```
-
 > **Note**: DeepChem requires a dev build (`2.8.1.dev*`); stable PyPI releases only go up to 2.5.0.
-> The `environment.yml` pins the exact versions used in the paper experiments.
+> `requirements.txt` pins the exact versions used in the paper experiments.
 > See `env_lock/` for per-machine/per-session environment snapshots.
 
 ---
@@ -242,7 +233,6 @@ Key versions across all runs: torch 2.10–2.11, transformers 5.0–5.12, rdkit 
 ├── results/
 │   └── paper_csv/          # Aggregated CSVs (tracked)
 ├── requirements.txt
-├── environment.yml
 └── LICENSE
 ```
 
