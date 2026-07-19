@@ -1,6 +1,6 @@
 # Core
 numpy==2.4.4
-pandas==3.0.1
+pandas==2.3.3
 scipy==1.17.1
 matplotlib==3.10.8
 scikit-learn==1.8.0
@@ -29,7 +29,7 @@ captum==0.8.0
 selfies==2.1.1
 
 # D-MPNN (Chemprop, Reviewer 1 #2)
-chemprop>=2.0.0
+chemprop==2.2.3
 
 # KROVEX descriptor selection (mendeleev periodic table)
-mendeleev>=0.14
+mendeleev==1.1.0
